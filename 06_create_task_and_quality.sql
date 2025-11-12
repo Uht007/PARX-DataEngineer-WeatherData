@@ -1,3 +1,5 @@
+USE DATABASE DE_2;
+
 -- 06_create_task_and_quality.sql
 -- Create an hourly task to load new data
 CREATE OR REPLACE TASK WEATHER_HOURLY_TASK
