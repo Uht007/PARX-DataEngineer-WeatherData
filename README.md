@@ -12,8 +12,8 @@ Setup
 - Run SQL worksheets in order:
 - 01_create_schemas_and_raw.sql - Run once to create Schemas                         
 - 02_create_python_proc.sql - Run once to create Python API procedure                        
-- 03_test_and_ingest.sql - Run on-demand
-- 04_transform_staging.sql - Run once to create Staging procedure after API 
+- 03_transform_staging.sql - Run once to create Staging procedure after API  
+- 04_test_and_ingest.sql - Run on-demand
 - 05_model_dw.sql - Run once to create DW procedure after Staging 
 - 06_create_task_and_quality.sql - Run once to configure automation
 
