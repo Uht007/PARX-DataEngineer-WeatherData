@@ -74,7 +74,7 @@ def main(session: snowpark.Session):
                 SELECT ?, CURRENT_TIMESTAMP(), PARSE_JSON(?)
             """, (loc["name"], json.dumps({"error": str(e)}))).collect()
 
-    -- Call the separate transform stored procedure
+    # Call the separate transform stored procedure
     session.sql("CALL STG.TRANSFORM_WEATHER();").collect()
 
     return f" Loaded {inserted_rows} new location(s), skipped {skipped_rows}. Transform procedure executed."
