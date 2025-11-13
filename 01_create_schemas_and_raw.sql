@@ -6,6 +6,9 @@ CREATE SCHEMA IF NOT EXISTS RAW;
 CREATE SCHEMA IF NOT EXISTS STG;
 CREATE SCHEMA IF NOT EXISTS DW;
 
+----------------------------
+-- RAW Layer
+----------------------------
 -- Create raw table to store JSON payloads
 CREATE OR REPLACE TABLE RAW.WEATHER_JSON (
     LOCATION_NAME STRING,
@@ -13,5 +16,33 @@ CREATE OR REPLACE TABLE RAW.WEATHER_JSON (
     PAYLOAD VARIANT
 );
 
--- Check tables
+----------------------------
+-- STG Layer
+----------------------------
+-- Create staging table for flattened hourly weather data
+CREATE OR REPLACE TABLE STG.WEATHER_HOURLY (
+    LOCATION_NAME STRING,
+    TIME TIMESTAMP_NTZ,
+    TEMPERATURE FLOAT,
+    PRECIPITATION FLOAT,
+    LOAD_TS TIMESTAMP_NTZ
+);
+
+----------------------------
+-- DW Layer
+----------------------------
+-- Create DW fact table for aggregated hourly weather metrics
+CREATE OR REPLACE TABLE DW.FCT_WEATHER (
+    LOCATION_NAME STRING,
+    HOUR TIMESTAMP_NTZ,
+    AVG_TEMPERATURE FLOAT,
+    TOTAL_PRECIPITATION FLOAT
+);
+
+----------------------------
+-- Optional: check tables
+----------------------------
+-- Show all tables in each schema
 SHOW TABLES IN SCHEMA RAW;
+SHOW TABLES IN SCHEMA STG;
+SHOW TABLES IN SCHEMA DW;
