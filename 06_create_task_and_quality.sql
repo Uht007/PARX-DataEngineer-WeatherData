@@ -17,7 +17,6 @@ END;
 -- Enable the task
 ALTER TASK WEATHER_HOURLY_TASK RESUME;
 
--- Simple data quality checks
 -- Count rows per location
 SELECT LOCATION_NAME, COUNT(*) AS ROWS_COUNT
 FROM STG.WEATHER_HOURLY
