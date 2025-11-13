@@ -1,0 +1,87 @@
+Weather ETL Pipeline – Interview Cheat Sheet
+1. Python Stored Procedure (RAW.LOAD_WEATHER)
+
+Q: How does it work?
+A: Fetches weather data from API for multiple locations, inserts JSON into RAW.WEATHER_JSON using PARSE_JSON(), and calls STG.TRANSFORM_WEATHER() to flatten and stage data.
+
+Q: Why Python instead of SQL?
+A: SQL can’t call external APIs. Python allows HTTP requests and JSON handling. Snowpark integrates Python with Snowflake tables.
+
+Q: How is it incremental?
+A: Uses LOAD_TS to track new loads; only inserts new API data.
+
+Q: How does it call the transform script?
+A: Uses session.sql("CALL STG.TRANSFORM_WEATHER()").collect() at the end of the procedure.
+
+2. Staging Layer (STG.WEATHER_HOURLY)
+
+Q: How does flattening JSON work?
+A: Uses LATERAL FLATTEN() on time, temperature_2m, precipitation arrays, aligning arrays by index to create hourly rows.
+
+Q: Why store raw JSON?
+A: Enables reprocessing, auditing, debugging, and incremental processing without hitting the API again.
+
+Q: How is it incremental?
+A: Filters rows by latest LOAD_TS when transforming.
+
+3. DW Layer (DW.FCT_WEATHER)
+
+Q: How does aggregation work?
+A: Groups by LOCATION_NAME and hour (DATE_TRUNC('hour', TIME)), aggregates AVG(TEMPERATURE) and SUM(PRECIPITATION).
+
+Q: How is it incremental?
+A: Aggregates only the newest LOAD_TS from STG and merges using MERGE to prevent duplicates.
+
+Q: Why use MERGE instead of INSERT?
+A: Updates existing rows and inserts new ones, avoiding duplicates and maintaining incremental consistency.
+
+Q: How to handle late-arriving data?
+A: Re-run the incremental load for missing LOAD_TS or implement backfill logic.
+
+4. Snowflake Task (WEATHER_HOURLY_TASK)
+
+Q: How does the task work?
+A: Scheduled hourly via CRON. Calls RAW.LOAD_WEATHER() → STG transform → DW.TRANSFORM_FCT_WEATHER().
+
+Q: What if the task fails?
+A: Check Task History; consider retries, alerts, and error handling.
+
+Q: Why hourly schedule?
+A: Matches API data frequency and balances freshness vs. compute costs.
+
+5. Data Quality Checks
+
+Q: What QA checks run?
+A:
+
+Row count per location (COUNT(*))
+
+Missing timestamps (TIME IS NULL)
+
+Duplicate timestamps (GROUP BY LOCATION_NAME, TIME HAVING COUNT(*) > 1)
+
+Q: How to extend QA to DW?
+A: Compare aggregated counts/values with STG, check duplicates, validate sums/averages.
+
+6. Design & Best Practices
+
+Q: Why RAW → STG → DW separation?
+A:
+
+RAW: audit, debugging, flexible reprocessing
+
+STG: flattened, cleansed, incremental
+
+DW: modeled for reporting/analytics
+
+Q: Why use LOAD_TS for incremental?
+A: Tracks new data without reprocessing old data; reduces compute costs.
+
+Q: How to scale pipeline?
+A: Add more locations, batch API calls, use parallel processing, schedule tasks strategically.
+
+Q: How to monitor & debug?
+A: Task history, Python logging, row counts, duplicates, missing timestamps.
+
+Q: Cost awareness?
+A: Incremental loads reduce compute; schedule wisely to avoid idle warehouse costs.
