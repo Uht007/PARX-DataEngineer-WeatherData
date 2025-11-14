@@ -1,7 +1,7 @@
 USE DATABASE DE_2;
 
 -- 03_create_python_proc.sql
-DE_2.RAW.LOAD_WEATHERCREATE OR REPLACE PROCEDURE RAW.LOAD_WEATHER()
+CREATE OR REPLACE PROCEDURE RAW.LOAD_WEATHER()
 RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.10'
@@ -27,6 +27,9 @@ def main(session: snowpark.Session):
     today = date.today()
     inserted_rows = 0
     skipped_rows = 0
+
+    # Set a single LOAD_TS for this batch
+    batch_load_ts = datetime.now()
 
     for loc in locations:
         query = f"""
@@ -64,19 +67,19 @@ def main(session: snowpark.Session):
 
             session.sql("""
                 INSERT INTO RAW.WEATHER_JSON (LOCATION_NAME, LOAD_TS, PAYLOAD)
-                SELECT ?, CURRENT_TIMESTAMP(), PARSE_JSON(?)
-            """, (loc["name"], json.dumps(data))).collect()
+                SELECT ?, ?, PARSE_JSON(?)
+            """, (loc["name"], batch_load_ts, json.dumps(data))).collect()
 
             inserted_rows += 1
 
         except Exception as e:
             session.sql("""
                 INSERT INTO RAW.WEATHER_JSON (LOCATION_NAME, LOAD_TS, PAYLOAD)
-                SELECT ?, CURRENT_TIMESTAMP(), PARSE_JSON(?)
-            """, (loc["name"], json.dumps({"error": str(e)}))).collect()
+                SELECT ?, ?, PARSE_JSON(?)
+            """, (loc["name"], batch_load_ts, json.dumps({"error": str(e)}))).collect()
 
     # Call the separate transform stored procedure
     session.sql("CALL STG.TRANSFORM_WEATHER();").collect()
 
-    return f" Loaded {inserted_rows} new location(s), skipped {skipped_rows}. Transform procedure executed."
+    return f"Loaded {inserted_rows} new location(s), skipped {skipped_rows}. Transform procedure executed."
 $$;
