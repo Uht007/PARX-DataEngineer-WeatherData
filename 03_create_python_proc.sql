@@ -28,7 +28,7 @@ def main(session: snowpark.Session):
     skipped = 0
 
     today = date.today()
-    batch_load_ts = datetime.now()   # used for this entire batch
+    batch_load_ts = datetime.now()
 
     for loc in locations:
 
@@ -41,7 +41,7 @@ def main(session: snowpark.Session):
         """
 
         result = session.sql(query).collect()
-        last_loaded_hour = result[0][0]  # may be None on first load
+        last_loaded_hour = result[0][0]
 
 
         # DETERMINE START DATE BASED LAST HOUR LOADED
