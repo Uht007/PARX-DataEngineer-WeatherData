@@ -47,7 +47,7 @@ def main(session: snowpark.Session):
 
         # DETERMINE START TIMESTAMP BASED ON LAST LOADED HOUR
         if last_loaded_hour is None:
-            # If no data, load 2 days back (full capture)
+            # If no data, load 2 days back
             start_ts = now_ts - timedelta(days=2)
         else:
             # Load from the very next missing hour
