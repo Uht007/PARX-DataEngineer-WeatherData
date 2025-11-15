@@ -12,7 +12,7 @@ AS
 $$
 import snowflake.snowpark as snowpark
 import requests
-from datetime import date, timedelta, datetime
+from datetime import datetime, timedelta, date
 import json
 
 def main(session: snowpark.Session):
@@ -24,34 +24,45 @@ def main(session: snowpark.Session):
         {"name": "greenmount_md", "lat": 39.6092, "lon": -76.8533},
     ]
 
-    today = date.today()
-    inserted_rows = 0
-    skipped_rows = 0
+    inserted = 0
+    skipped = 0
 
-    # Set a single LOAD_TS for this batch
-    batch_load_ts = datetime.now()
+    today = date.today()
+    batch_load_ts = datetime.now()   # used for this entire batch
 
     for loc in locations:
+
+        # GET LAST LOADED HOUR
         query = f"""
-            SELECT MAX(PAYLOAD:hourly:time[0]::date)
-            FROM RAW.WEATHER_JSON
+            SELECT MAX(TO_TIMESTAMP_NTZ(f.value::string)) AS last_hour
+            FROM RAW.WEATHER_JSON r,
+                 LATERAL FLATTEN(input => r.PAYLOAD:hourly:time) f
             WHERE LOCATION_NAME = '{loc['name']}'
         """
+
         result = session.sql(query).collect()
-        last_loaded_date = result[0][0]
+        last_loaded_hour = result[0][0]  # may be None on first load
 
-        if last_loaded_date is not None:
-            start_date = (datetime.strptime(str(last_loaded_date), "%Y-%m-%d") + timedelta(days=1)).date()
+
+        # DETERMINE START DATE BASED LAST HOUR LOADED
+        if last_loaded_hour is None:
+            # If no data, load 2 days back
+            start_date = today - timedelta(days=2)
         else:
-            start_date = today - timedelta(days=1)
+            # Next missing hour
+            next_hour = last_loaded_hour + timedelta(hours=1)
+            start_date = next_hour.date()
 
+        # If start date is today or later, nothing new available yet
         if start_date >= today:
-            skipped_rows += 1
+            skipped += 1
             continue
 
         start_date_str = start_date.isoformat()
         end_date_str = today.isoformat()
 
+
+        # CALL OPEN-METEO API
         url = (
             f"https://archive-api.open-meteo.com/v1/archive?"
             f"latitude={loc['lat']}&longitude={loc['lon']}"
@@ -65,21 +76,24 @@ def main(session: snowpark.Session):
             response.raise_for_status()
             data = response.json()
 
+            # INSERT NEW JSON PAYLOAD ROW
             session.sql("""
                 INSERT INTO RAW.WEATHER_JSON (LOCATION_NAME, LOAD_TS, PAYLOAD)
                 SELECT ?, ?, PARSE_JSON(?)
             """, (loc["name"], batch_load_ts, json.dumps(data))).collect()
 
-            inserted_rows += 1
+            inserted += 1
 
         except Exception as e:
+            # Insert an error record to inspect later
             session.sql("""
                 INSERT INTO RAW.WEATHER_JSON (LOCATION_NAME, LOAD_TS, PAYLOAD)
                 SELECT ?, ?, PARSE_JSON(?)
             """, (loc["name"], batch_load_ts, json.dumps({"error": str(e)}))).collect()
+            skipped += 1
 
-    # Call the separate transform stored procedure
+    # 5. Run STG transform AFTER inserting
     session.sql("CALL STG.TRANSFORM_WEATHER();").collect()
 
-    return f"Loaded {inserted_rows} new location(s), skipped {skipped_rows}. Transform procedure executed."
+    return f"Inserted {inserted} locations, skipped {skipped}, batch_load_ts={batch_load_ts}"
 $$;
